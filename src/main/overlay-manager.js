@@ -47,7 +47,8 @@ class OverlayManager {
         preload: path.join(__dirname, '..', 'preload', 'overlay-preload.js'),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: false
+        sandbox: false,
+        v8CacheOptions: 'none'
       }
     });
 

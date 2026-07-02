@@ -57,7 +57,8 @@ const ACTION_TYPES = [
   'RunCommand',
   'OpenFolder',
   'SendHotkey',
-  'MediaKey'
+  'MediaKey',
+  'SubWheel'
 ];
 
 module.exports = { IPC, MOUSE_BUTTON, ACTION_TYPES };
