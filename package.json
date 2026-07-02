@@ -27,6 +27,12 @@
     "win": {
       "target": "nsis",
       "icon": "assets/icon-256.png"
+    },
+    "nsis": {
+      "allowToChangeInstallationDirectory": false,
+      "oneClick": true,
+      "runAfterFinish": true,
+      "include": "build/installer.nsh"
     }
   },
   "dependencies": {
