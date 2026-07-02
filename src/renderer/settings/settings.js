@@ -28,7 +28,8 @@ const ACTION_PARAMS = {
     { key: 'cwd', label: 'Working dir', type: 'folder' }
   ],
   SendHotkey: [{ key: 'combo', label: 'Hotkey (e.g. Ctrl+Shift+S)', type: 'text' }],
-  MediaKey: [{ key: 'key', label: 'Media key', type: 'select', options: ['play_pause', 'next', 'prev', 'stop', 'volume_up', 'volume_down', 'volume_mute'] }]
+  MediaKey: [{ key: 'key', label: 'Media key', type: 'select', options: ['play_pause', 'next', 'prev', 'stop', 'volume_up', 'volume_down', 'volume_mute'] }],
+  SubWheel: [{ key: 'slices', label: 'Sub-slices', type: 'subwheel' }]
 };
 
 const THEME_KEYS = [
@@ -243,11 +244,14 @@ function renderSlices() {
   const list = $('#sliceList');
   list.innerHTML = '';
   const slices = activeProfile().slices;
-  slices.forEach((slice, idx) => list.appendChild(sliceCard(slice, idx)));
+  slices.forEach((slice, idx) => list.appendChild(sliceCard(slice, idx, activeProfile().slices, renderSlices)));
   renderPreview();
 }
 
-function sliceCard(slice, idx) {
+// sliceCard is reusable for top-level and nested sub-slices.
+// slicesArray: the array this slice belongs to (for reorder/remove).
+// onChanged: callback to re-render the slice list after mutations.
+function sliceCard(slice, idx, slicesArray, onChanged) {
   const tpl = $('#sliceTemplate').content.cloneNode(true);
   const card = tpl.querySelector('.slice-card');
   card.dataset.id = slice.id;
@@ -340,40 +344,60 @@ function sliceCard(slice, idx) {
   card.querySelector('.slice-color').value = slice.color || '#1e222c';
   card.querySelector('.slice-color').addEventListener('input', (e) => { slice.color = e.target.value; renderPreview(); });
 
-  // Reorder within the profile's slices array (top → clockwise on the wheel).
-  card.querySelector('.slice-up').addEventListener('click', () => moveSlice(slice.id, -1));
-  card.querySelector('.slice-down').addEventListener('click', () => moveSlice(slice.id, +1));
+  // Reorder within the slices array (top → clockwise on the wheel).
+  card.querySelector('.slice-up').addEventListener('click', () => {
+    const i = slicesArray.findIndex((s) => s.id === slice.id);
+    if (i > 0) { [slicesArray[i], slicesArray[i - 1]] = [slicesArray[i - 1], slicesArray[i]]; onChanged(); }
+  });
+  card.querySelector('.slice-down').addEventListener('click', () => {
+    const i = slicesArray.findIndex((s) => s.id === slice.id);
+    if (i >= 0 && i < slicesArray.length - 1) { [slicesArray[i], slicesArray[i + 1]] = [slicesArray[i + 1], slicesArray[i]]; onChanged(); }
+  });
 
   // Action type dropdown
   const typeSel = card.querySelector('.slice-action-type');
   window.meel.actionTypes.forEach((t) => typeSel.appendChild(el('option', { value: t }, t)));
   typeSel.value = slice.action.type;
   typeSel.addEventListener('change', (e) => {
-    slice.action = { type: e.target.value };
-    renderActionParams(card, slice);
+    const newType = e.target.value;
+    slice.action = newType === 'SubWheel' ? { type: 'SubWheel', slices: [] } : { type: newType };
+    renderActionParams(card, slice, updateImportBtnVisibility, slicesArray, onChanged);
     updateImportBtnVisibility();
+    updateNestBtnVisibility();
+    renderPreview();
+  });
+
+  // Nest button: convert this slice to a SubWheel (or hide if already one)
+  const nestBtn = card.querySelector('.slice-nest-btn');
+  function updateNestBtnVisibility() {
+    nestBtn.style.display = (slice.action.type === 'SubWheel') ? 'none' : '';
+  }
+  updateNestBtnVisibility();
+  nestBtn.addEventListener('click', () => {
+    // Wrap the current action as the first sub-slice, then convert to SubWheel
+    const oldAction = Object.assign({}, slice.action);
+    const oldLabel = slice.label || 'Action';
+    slice.action = {
+      type: 'SubWheel',
+      slices: [
+        { id: 'sub-' + Date.now(), label: oldLabel, icon: slice.icon || '⭐', color: null, action: oldAction }
+      ]
+    };
+    typeSel.value = 'SubWheel';
+    renderActionParams(card, slice, updateImportBtnVisibility, slicesArray, onChanged);
+    updateImportBtnVisibility();
+    updateNestBtnVisibility();
     renderPreview();
   });
 
   card.querySelector('.slice-remove').addEventListener('click', () => {
-    const arr = activeProfile().slices;
-    const i = arr.findIndex((s) => s.id === slice.id);
-    if (i >= 0) arr.splice(i, 1);
-    renderSlices();
+    const i = slicesArray.findIndex((s) => s.id === slice.id);
+    if (i >= 0) slicesArray.splice(i, 1);
+    onChanged();
   });
 
-  renderActionParams(card, slice, updateImportBtnVisibility);
+  renderActionParams(card, slice, updateImportBtnVisibility, slicesArray, onChanged);
   return card;
-}
-
-// Move a slice up (-1) or down (+1) in the active profile's array.
-function moveSlice(id, delta) {
-  const arr = activeProfile().slices;
-  const i = arr.findIndex((s) => s.id === id);
-  const j = i + delta;
-  if (i < 0 || j < 0 || j >= arr.length) return;
-  [arr[i], arr[j]] = [arr[j], arr[i]];
-  renderSlices();
 }
 
 // ---- Live preview -----------------------------------------------------------
@@ -391,67 +415,88 @@ function renderPreview() {
   const t = a.theme || {};
   const slices = activeProfile().slices;
   const n = slices.length;
-  const cx = 110, cy = 110;
-  const outer = 100, inner = Math.max(20, Math.min(80, (a.innerRadius / a.wheelRadius) * outer));
+  const cx = 150, cy = 150;
+  // Shrink the main ring to leave room for sub-rings outside
+  const outer = 85, inner = Math.max(20, Math.min(60, (a.innerRadius / a.wheelRadius) * outer));
   const gap = ((a.sliceGapDeg || 0) * Math.PI) / 180;
-  const seg = n ? (2 * Math.PI) / n : 0;
 
-  // Background disc.
+  // Background disc — covers full preview area
   const bg = document.createElementNS(SVG_NS, 'circle');
-  bg.setAttribute('cx', cx); bg.setAttribute('cy', cy); bg.setAttribute('r', outer + 4);
+  bg.setAttribute('cx', cx); bg.setAttribute('cy', cy); bg.setAttribute('r', 148);
   bg.setAttribute('fill', t.background || '#14161c');
   svg.appendChild(bg);
 
+  const startOffset = -Math.PI / 2;
+  const seg = n ? (2 * Math.PI) / n : 0;
+
+  renderPreviewRing(svg, slices, cx, cy, inner, outer, startOffset - seg / 2, startOffset + (2 * Math.PI) - seg / 2, gap, a, t, 0, outer - inner);
+
+  // Center dot
+  const dot = document.createElementNS(SVG_NS, 'circle');
+  dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.setAttribute('r', 4);
+  dot.setAttribute('fill', t.centerDot || '#2b64f5');
+  svg.appendChild(dot);
+}
+
+function renderPreviewRing(svg, slices, cx, cy, innerR, outerR, startAngle, endAngle, gap, a, t, depth, parentWidth) {
+  const n = slices.length;
+  if (!n) return;
+  const totalAngle = endAngle - startAngle;
+  const seg = totalAngle / n;
+  const fontScale = Math.max(0.45, 1 - depth * 0.35);
+  const subGap = 3;
+
   slices.forEach((slice, i) => {
-    const mid = -Math.PI / 2 + i * seg;
-    const start = mid - seg / 2 + gap / 2;
-    const end = mid + seg / 2 - gap / 2;
+    const mid = startAngle + (i + 0.5) * seg;
+    const sStart = startAngle + i * seg + gap / 2;
+    const sEnd = startAngle + (i + 1) * seg - gap / 2;
+
     const p = document.createElementNS(SVG_NS, 'path');
-    p.setAttribute('d', wedge(cx, cy, inner, outer, start, end));
+    p.setAttribute('d', wedge(cx, cy, innerR, outerR, sStart, sEnd));
     p.setAttribute('fill', slice.color || t.slice || '#1e222c');
     p.setAttribute('stroke', t.border || '#2a2f3a');
     svg.appendChild(p);
 
-    const lr = (inner + outer) / 2;
+    // Label/icon
+    const lr = (innerR + outerR) / 2;
     const lx = cx + Math.cos(mid) * lr;
     const ly = cy + Math.sin(mid) * lr;
+    const arcLen = (sEnd - sStart) * lr;
 
-    if (slice.iconImage) {
-      const imgSize = 18;
-      const img = document.createElementNS(SVG_NS, 'image');
-      img.setAttribute('href', slice.iconImage);
-      img.setAttribute('x', lx - imgSize / 2);
-      img.setAttribute('y', ly - imgSize / 2 - (a.showLabels !== false && slice.label ? 4 : 0));
-      img.setAttribute('width', imgSize);
-      img.setAttribute('height', imgSize);
-      svg.appendChild(img);
-
-      if (a.showLabels !== false && slice.label) {
-        const label = document.createElementNS(SVG_NS, 'text');
-        label.setAttribute('x', lx); label.setAttribute('y', ly + imgSize / 2 + 4);
-        label.setAttribute('fill', t.text || '#e6e9f0');
-        label.setAttribute('font-size', '9');
-        label.setAttribute('text-anchor', 'middle');
-        label.setAttribute('dominant-baseline', 'middle');
-        label.textContent = slice.label;
-        svg.appendChild(label);
+    if (arcLen > 10) {
+      if (slice.iconImage) {
+        const imgSize = Math.round(16 * fontScale);
+        const img = document.createElementNS(SVG_NS, 'image');
+        img.setAttribute('href', slice.iconImage);
+        img.setAttribute('x', lx - imgSize / 2);
+        img.setAttribute('y', ly - imgSize / 2);
+        img.setAttribute('width', imgSize);
+        img.setAttribute('height', imgSize);
+        svg.appendChild(img);
+      } else {
+        const showIcon = slice.icon;
+        const showLabel = a.showLabels !== false && slice.label;
+        if (showIcon || showLabel) {
+          const txt = document.createElementNS(SVG_NS, 'text');
+          txt.setAttribute('x', lx); txt.setAttribute('y', ly);
+          txt.setAttribute('fill', t.text || '#e6e9f0');
+          txt.setAttribute('font-size', Math.round((showIcon ? 13 : 9) * fontScale));
+          txt.setAttribute('text-anchor', 'middle');
+          txt.setAttribute('dominant-baseline', 'middle');
+          txt.textContent = showIcon ? slice.icon : slice.label;
+          svg.appendChild(txt);
+        }
       }
-    } else if (slice.icon || (a.showLabels !== false && slice.label)) {
-      const label = document.createElementNS(SVG_NS, 'text');
-      label.setAttribute('x', lx); label.setAttribute('y', ly);
-      label.setAttribute('fill', t.text || '#e6e9f0');
-      label.setAttribute('font-size', '11');
-      label.setAttribute('text-anchor', 'middle');
-      label.setAttribute('dominant-baseline', 'middle');
-      label.textContent = slice.icon || slice.label;
-      svg.appendChild(label);
+    }
+
+    // Recurse into SubWheel children — rendered as outer ring at actual position
+    if (slice.action && slice.action.type === 'SubWheel' && Array.isArray(slice.action.slices) && slice.action.slices.length > 0) {
+      const subInner = outerR + subGap;
+      const subWidth = Math.max(18, parentWidth * 0.55);
+      const subOuter = subInner + subWidth;
+      renderPreviewRing(svg, slice.action.slices, cx, cy, subInner, subOuter, sStart, sEnd, gap * 0.7, a, t, depth + 1, subWidth);
     }
   });
-
-  const dot = document.createElementNS(SVG_NS, 'circle');
-  dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.setAttribute('r', 5);
-  dot.setAttribute('fill', t.centerDot || '#2b64f5');
-  svg.appendChild(dot);
 }
 
 function wedge(cx, cy, r0, r1, a0, a1) {
@@ -464,14 +509,14 @@ function wedge(cx, cy, r0, r1, a0, a1) {
   return `M ${x0o} ${y0o} A ${r1} ${r1} 0 ${large} 1 ${x1o} ${y1o} L ${x1i} ${y1i} A ${r0} ${r0} 0 ${large} 0 ${x0i} ${y0i} Z`;
 }
 
-function renderActionParams(card, slice, onPathChange) {
+function renderActionParams(card, slice, onPathChange, slicesArray, onChanged) {
   const wrap = card.querySelector('.slice-action-params');
   wrap.innerHTML = '';
   const params = ACTION_PARAMS[slice.action.type] || [];
-  params.forEach((param) => wrap.appendChild(paramRow(slice, param, onPathChange)));
+  params.forEach((param) => wrap.appendChild(paramRow(slice, param, onPathChange, slicesArray, onChanged)));
 }
 
-function paramRow(slice, param, onPathChange) {
+function paramRow(slice, param, onPathChange, slicesArray, onChanged) {
   const val = slice.action[param.key];
   const row = el('div', { class: 'row' }, el('label', {}, param.label));
 
@@ -509,6 +554,40 @@ function paramRow(slice, param, onPathChange) {
       slice.action[param.key] = e.target.value.trim() ? e.target.value.trim().split(/\s+/) : [];
     });
     row.appendChild(input);
+  } else if (param.type === 'subwheel') {
+    // Inline sub-slice editor for SubWheel action type
+    row.innerHTML = '';
+    const container = el('div', { class: 'subwheel-editor' });
+    const subSlices = slice.action.slices || [];
+    slice.action.slices = subSlices; // ensure reference is set
+
+    function renderSubSlices() {
+      container.innerHTML = '';
+      const heading = el('div', { class: 'subwheel-header' },
+        el('label', {}, `Sub-slices (${subSlices.length})`));
+      container.appendChild(heading);
+
+      subSlices.forEach((sub, si) => {
+        container.appendChild(sliceCard(sub, si, subSlices, () => { renderSubSlices(); renderPreview(); }));
+      });
+
+      const addBtn = el('button', { class: 'btn tiny primary' }, '+ Add sub-slice');
+      addBtn.addEventListener('click', () => {
+        subSlices.push({
+          id: 'sub-' + Date.now(),
+          label: 'New',
+          icon: '⭐',
+          color: null,
+          action: { type: 'LaunchProgram', path: '', args: [] }
+        });
+        renderSubSlices();
+        renderPreview();
+      });
+      container.appendChild(addBtn);
+    }
+
+    renderSubSlices();
+    row.appendChild(container);
   } else {
     const input = el('input', { type: 'text', value: val || '' });
     input.addEventListener('input', (e) => { slice.action[param.key] = e.target.value; });

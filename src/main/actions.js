@@ -230,6 +230,13 @@ const HANDLERS = {
     ].join(' ');
     await runPowerShell(ps);
     return { media: action.key };
+  },
+
+  // SubWheel navigation is handled by the overlay renderer. If this handler
+  // is ever called directly, it means a SubWheel slice was activated without
+  // the user drilling into its children.
+  SubWheel() {
+    return { info: 'SubWheel — no direct action' };
   }
 };
 

@@ -14,6 +14,11 @@
 const path = require('path');
 const { app, BrowserWindow, ipcMain, dialog, screen } = require('electron');
 
+// Reduce GPU cache contention on startup (harmless Chromium noise when a
+// previous instance locked the cache dir).
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+app.commandLine.appendSwitch('disable-gpu-process-crash-limit');
+
 const { IPC } = require('../shared/constants');
 const configStore = require('./config');
 const { TriggerHook } = require('./hook');
@@ -32,9 +37,10 @@ let tray = null;
 let settingsWin = null;
 
 // Tracks whether the wheel is currently open, and the slice the cursor is
-// hovering (reported by the overlay renderer).
+// hovering (reported by the overlay renderer). hoveredSlice is { id, action }
+// for the leaf slice under the cursor, or null.
 let wheelOpen = false;
-let hoveredSliceId = null;
+let hoveredSlice = null;
 
 // While the wheel is open we poll the cursor position ourselves via
 // screen.getCursorScreenPoint(). That returns DIP coordinates that line up with
@@ -71,7 +77,7 @@ function openWheel(cursorHint) {
   if (wheelOpen) return; // already open — ignore re-entry
   const slices = configStore.activeSlices(config);
   if (!slices.length) return;
-  hoveredSliceId = null;
+  hoveredSlice = null;
   // Always take the true cursor position in DIP coords (works on every
   // monitor); the hook's physical-pixel hint is only used as a fallback.
   const center = screen.getCursorScreenPoint();
@@ -85,12 +91,10 @@ async function closeWheelAndFire() {
   wheelOpen = false;
   stopCursorPoll();
   overlay.hide();
-  if (hoveredSliceId) {
-    const slices = configStore.activeSlices(config);
-    const slice = slices.find((s) => s.id === hoveredSliceId);
-    if (slice) await runAction(slice.action, actionContext());
+  if (hoveredSlice && hoveredSlice.action && hoveredSlice.action.type !== 'SubWheel') {
+    await runAction(hoveredSlice.action, actionContext());
   }
-  hoveredSliceId = null;
+  hoveredSlice = null;
 }
 
 function closeWheelNoFire() {
@@ -98,7 +102,7 @@ function closeWheelNoFire() {
   wheelOpen = false;
   stopCursorPoll();
   overlay.hide();
-  hoveredSliceId = null;
+  hoveredSlice = null;
 }
 
 // Context handed to the actions engine so an action can, e.g., ask the user to
@@ -230,7 +234,7 @@ function broadcastConfig() {
 
 function wireIpc() {
   // Overlay renderer tells us which slice the cursor is over (or null).
-  ipcMain.on(IPC.OVERLAY_SELECT, (_e, sliceId) => { hoveredSliceId = sliceId; });
+  ipcMain.on(IPC.OVERLAY_SELECT, (_e, sliceData) => { hoveredSlice = sliceData; });
   ipcMain.on(IPC.OVERLAY_READY, () => { /* overlay finished first paint */ });
 
   // Region selector renderer reports the dragged rectangle (or null).
@@ -365,7 +369,8 @@ app.whenReady().then(() => {
   config = configStore.loadConfig();
 
   overlay = new OverlayManager();
-  overlay.create();
+  // Defer overlay window creation to first wheel open (overlay.show calls create
+  // internally if needed). Avoids GPU/window overhead at startup.
 
   region = new RegionManager();
 

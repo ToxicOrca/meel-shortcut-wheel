@@ -78,6 +78,8 @@ function validateConfig(cfg, defaults) {
   a.sliceGapDeg = num(a.sliceGapDeg, 3, 0, 30);
   a.animationMs = num(a.animationMs, 120, 0, 1000);
   if (typeof a.showLabels !== 'boolean') a.showLabels = true;
+  a.subWheelGap = num(a.subWheelGap, 4, 0, 20);
+  a.subWheelCollapsedWidth = num(a.subWheelCollapsedWidth, 8, 4, 30);
 
   // Profiles must exist and the active one must be present.
   if (!isObject(out.profiles) || Object.keys(out.profiles).length === 0) {
@@ -88,17 +90,27 @@ function validateConfig(cfg, defaults) {
   }
 
   // Every profile needs a slices array; every slice needs id + action.type.
-  for (const [pid, profile] of Object.entries(out.profiles)) {
-    if (!isObject(profile)) { delete out.profiles[pid]; continue; }
-    if (!Array.isArray(profile.slices)) profile.slices = [];
-    profile.slices = profile.slices.filter(isObject).map((s, i) => {
-      if (!s.id) s.id = `slice-${pid}-${i}`;
+  // SubWheel slices are validated recursively.
+  function validateSlices(slices, prefix) {
+    return slices.filter(isObject).map((s, i) => {
+      if (!s.id) s.id = `${prefix}-${i}`;
       if (!isObject(s.action) || !s.action.type) s.action = { type: 'LaunchProgram', path: '', args: [] };
       if (s.label === undefined) s.label = '';
       if (s.icon === undefined) s.icon = '';
       if (s.color === undefined) s.color = null;
+      // Recurse into SubWheel children
+      if (s.action.type === 'SubWheel') {
+        if (!Array.isArray(s.action.slices)) s.action.slices = [];
+        s.action.slices = validateSlices(s.action.slices, s.id);
+      }
       return s;
     });
+  }
+
+  for (const [pid, profile] of Object.entries(out.profiles)) {
+    if (!isObject(profile)) { delete out.profiles[pid]; continue; }
+    if (!Array.isArray(profile.slices)) profile.slices = [];
+    profile.slices = validateSlices(profile.slices, `slice-${pid}`);
   }
 
   return out;
