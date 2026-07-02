@@ -24,6 +24,17 @@ it. A tray icon opens a fully customizable, dark-themed settings app.
 
 ---
 
+## Install
+
+Download the latest **Meel Setup.exe** from
+[Releases](https://github.com/ToxicOrca/meel-shortcut-wheel/releases) and run
+it. Windows SmartScreen may warn on first launch since the app is unsigned —
+click **"More info" → "Run anyway"**.
+
+Alternatively, build from source (see [Setup & run](#setup--run-windows) below).
+
+---
+
 ## Why this exists
 
 Radial / pie menus are faster than hunting through the Start menu or a taskbar
@@ -220,8 +231,13 @@ meel-shortcut-mouse/
   labels) with **size presets** (Compact / Default / Large / etc.) and **10
   theme presets** (Default Dark, Midnight Blue, Deep Purple, Nord, Ember,
   Forest, Slate, Dracula, Monokai, Ocean) plus full manual color control;
-  **live preview** mini-wheel; **start-on-login** toggle; shows the config file
-  path; profile selector.
+  **live preview** mini-wheel with recursive sub-wheel rendering;
+  **start-on-login** toggle; shows the config file path; profile selector.
+- **Nested sub-wheels** — any slice can contain child slices displayed as a
+  concentric outer ring. A collapsed indicator appears outside parent slices;
+  moving the cursor to it expands the sub-ring with full labels. Supports
+  arbitrary nesting depth. In the settings editor, click **⊕** on any slice
+  to convert it to a sub-wheel, or set the action type to `SubWheel`.
 - **Config persistence + validation** — JSON in Electron `userData`, seeded from
   `config/default-config.json`, reloaded live on save. On load the config is
   **validated and deep-merged over defaults** so a partial, malformed, or older
@@ -245,7 +261,6 @@ meel-shortcut-mouse/
 - Upgrade `SendHotkey` to a true injector (`@nut-tree/nut-js` / `robotjs`) for
   Win-key chords and reliability; tune region cropping on mixed-DPI rigs.
 - Multiple **profiles/wheels** and a modifier to switch between them.
-- Per-slice submenus (nested wheels).
 - Code-sign the build to reduce antivirus friction.
 
 **Later / migration:**
