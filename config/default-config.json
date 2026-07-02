@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "enabled": true,
+  "trigger": {
+    "//": "Which physical input opens the wheel. type is 'mouse' or 'keyboard'.",
+    "type": "mouse",
+    "//button": "uiohook mouse button numbers: 1=left, 2=right, 3=middle, 4=MB4/back, 5=MB5/forward",
+    "button": 4,
+    "keycode": null,
+    "//mode": "'hold' = open on press, activate hovered slice on release. 'toggle' = click to open, click again to pick.",
+    "mode": "hold"
+  },
+  "appearance": {
+    "theme": {
+      "background": "#14161c",
+      "slice": "#1e222c",
+      "sliceHover": "#2b64f5",
+      "border": "#2a2f3a",
+      "text": "#e6e9f0",
+      "textDim": "#8b93a7",
+      "centerDot": "#2b64f5"
+    },
+    "wheelRadius": 150,
+    "innerRadius": 55,
+    "sliceGapDeg": 3,
+    "animationMs": 120,
+    "showLabels": true,
+    "fontFamily": "Segoe UI, sans-serif"
+  },
+  "activeProfile": "default",
+  "profiles": {
+    "default": {
+      "name": "Default",
+      "slices": [
+        {
+          "id": "slice-notepad",
+          "label": "Notepad",
+          "icon": "📝",
+          "color": null,
+          "action": {
+            "type": "LaunchProgram",
+            "path": "C:\\Windows\\System32\\notepad.exe",
+            "args": []
+          }
+        },
+        {
+          "id": "slice-screenshot",
+          "label": "Screenshot",
+          "icon": "📸",
+          "color": null,
+          "action": {
+            "type": "Screenshot",
+            "mode": "full",
+            "saveDir": "",
+            "toClipboard": false
+          }
+        },
+        {
+          "id": "slice-calc",
+          "label": "Calculator",
+          "icon": "🧮",
+          "color": null,
+          "action": {
+            "type": "LaunchProgram",
+            "path": "C:\\Windows\\System32\\calc.exe",
+            "args": []
+          }
+        },
+        {
+          "id": "slice-explorer",
+          "label": "Files",
+          "icon": "📁",
+          "color": null,
+          "action": {
+            "type": "OpenFolder",
+            "path": "%USERPROFILE%"
+          }
+        },
+        {
+          "id": "slice-url",
+          "label": "Anthropic",
+          "icon": "🌐",
+          "color": null,
+          "action": {
+            "type": "OpenURL",
+            "url": "https://www.anthropic.com"
+          }
+        },
+        {
+          "id": "slice-mute",
+          "label": "Mute",
+          "icon": "🔇",
+          "color": null,
+          "action": {
+            "type": "MediaKey",
+            "key": "volume_mute"
+          }
+        }
+      ]
+    }
+  }
+}

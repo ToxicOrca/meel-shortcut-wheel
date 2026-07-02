@@ -1,0 +1,15 @@
+node_modules/
+dist/
+out/
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.env
+.env.*
+.vscode/
+*.suo
+*.user
+# Local user config written at runtime lives in userData, not the repo,
+# but ignore any stray local copies used during dev:
+config/local-config.json

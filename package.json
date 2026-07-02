@@ -1,0 +1,40 @@
+{
+  "name": "meel-shortcut-mouse",
+  "productName": "Meel",
+  "version": "0.1.0",
+  "description": "Meel — a radial shortcut wheel for Windows, triggered by an extra mouse button. Press a hotkey (usually MB4/MB5) to pop a dark-themed radial menu around the cursor; release over a slice to fire its action.",
+  "main": "src/main/main.js",
+  "author": "Tracey",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist": "electron-builder --win",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "build": {
+    "appId": "com.meel.shortcutmouse",
+    "productName": "Meel",
+    "files": [
+      "src/**/*",
+      "config/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon-256.png"
+    }
+  },
+  "dependencies": {
+    "uiohook-napi": "^1.5.4",
+    "screenshot-desktop": "^1.15.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  }
+}

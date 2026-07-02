@@ -1,0 +1,54 @@
+/* Fully transparent overlay — the window itself is transparent; only the SVG
+   wheel is painted. Never show a background color (avoids white flash). */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  cursor: none; /* the real cursor is drawn by the OS; hide any default */
+}
+
+#wheel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* window is click-through anyway */
+}
+
+/* Fade/scale-in animation applied to the wheel group on show. */
+.wheel-group {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  animation: meel-in var(--anim, 120ms) ease-out forwards;
+}
+
+@keyframes meel-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Slice label text */
+.slice-label {
+  font-weight: 600;
+  paint-order: stroke;
+  dominant-baseline: middle;
+  text-anchor: middle;
+}
+
+/* Selected slice emphasis. Fill is set inline from the theme's sliceHover; here
+   we add a crisp accent outline and a brightness pop so the active wedge reads
+   clearly at a glance. */
+path[data-id] {
+  transition: fill 90ms ease, stroke-width 90ms ease, filter 90ms ease;
+}
+path[data-id].selected {
+  stroke: #cfe0ff;
+  stroke-width: 2.5;
+  filter: brightness(1.12) drop-shadow(0 0 6px rgba(43, 100, 245, 0.55));
+}

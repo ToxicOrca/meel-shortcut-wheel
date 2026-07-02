@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
+  <title>Meel Settings</title>
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◎</span>
+      <span>Meel</span>
+      <span class="subtitle">radial shortcut wheel</span>
+    </div>
+    <div class="topbar-actions">
+      <label class="switch">
+        <input type="checkbox" id="enabledToggle" />
+        <span class="slider"></span>
+      </label>
+      <span id="enabledLabel" class="enabled-label">Enabled</span>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="wheel">Wheel &amp; Slices</button>
+    <button class="tab" data-tab="trigger">Trigger</button>
+    <button class="tab" data-tab="appearance">Appearance</button>
+    <button class="tab" data-tab="advanced">Advanced</button>
+  </nav>
+
+  <main>
+    <!-- WHEEL & SLICES -->
+    <section id="tab-wheel" class="panel active">
+      <div class="panel-head">
+        <h2>Slices</h2>
+      </div>
+      <p class="hint">Each slice is one shortcut in the ring. Order is applied top-clockwise — use ▲▼ to reorder.</p>
+      <div class="wheel-split">
+        <div id="sliceList" class="slice-list"></div>
+        <div class="preview-pane">
+          <h3>Live preview</h3>
+          <svg id="wheelPreview" viewBox="0 0 220 220" width="220" height="220" aria-hidden="true"></svg>
+          <p class="hint">Reflects saved-shape edits (labels, colors, count, theme). Click Save to apply.</p>
+          <button id="addSlice" class="btn primary add-slice-btn">+ Add slice</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRIGGER -->
+    <section id="tab-trigger" class="panel">
+      <h2>Trigger</h2>
+      <p class="hint">The button that opens the wheel. A spare mouse side button (MB4/MB5) is recommended.</p>
+      <div class="field">
+        <label>Current trigger</label>
+        <div class="row">
+          <code id="triggerDisplay">—</code>
+          <button id="captureTrigger" class="btn">Press to set…</button>
+        </div>
+        <p id="captureHint" class="hint" style="display:none;">Now press the mouse button or key you want…</p>
+      </div>
+      <div class="field">
+        <label>Mode</label>
+        <select id="triggerMode">
+          <option value="hold">Hold to open, release over a slice to activate</option>
+          <option value="toggle">Click to toggle open, click a slice to activate</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- APPEARANCE -->
+    <section id="tab-appearance" class="panel">
+      <h2>Appearance</h2>
+
+      <h3>Size preset</h3>
+      <div class="field">
+        <select id="sizePreset">
+          <option value="">Custom</option>
+        </select>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label>Wheel radius (px)</label>
+          <input type="number" id="wheelRadius" min="80" max="400" />
+        </div>
+        <div class="field">
+          <label>Inner radius (px)</label>
+          <input type="number" id="innerRadius" min="20" max="200" />
+        </div>
+        <div class="field">
+          <label>Slice gap (deg)</label>
+          <input type="number" id="sliceGapDeg" min="0" max="20" />
+        </div>
+        <div class="field">
+          <label>Animation (ms)</label>
+          <input type="number" id="animationMs" min="0" max="600" />
+        </div>
+        <div class="field checkbox">
+          <label><input type="checkbox" id="showLabels" /> Show text labels</label>
+        </div>
+      </div>
+
+      <h3>Theme preset</h3>
+      <div class="field">
+        <select id="themePreset">
+          <option value="">Custom</option>
+        </select>
+      </div>
+      <h3>Theme colors</h3>
+      <div class="grid2" id="themeColors"></div>
+    </section>
+
+    <!-- ADVANCED -->
+    <section id="tab-advanced" class="panel">
+      <h2>Advanced</h2>
+      <p class="hint">Profiles let you keep multiple wheels. One profile is active at a time.</p>
+      <div class="field">
+        <label>Active profile</label>
+        <select id="activeProfile"></select>
+      </div>
+      <div class="field checkbox">
+        <label><input type="checkbox" id="startOnLogin" /> Start Meel when I sign in to Windows</label>
+      </div>
+      <div class="field">
+        <label>Config file</label>
+        <code id="configPath">—</code>
+      </div>
+      <div class="field">
+        <button id="resetConfig" class="btn danger">Reset to defaults</button>
+      </div>
+      <p class="hint">Config is stored as JSON in your user data folder and reloaded live on save.</p>
+    </section>
+  </main>
+
+  <footer class="footerbar">
+    <span id="statusMsg" class="status"></span>
+    <div>
+      <button id="saveConfig" class="btn primary">Save</button>
+    </div>
+  </footer>
+
+  <!-- Slice editor template -->
+  <template id="sliceTemplate">
+    <div class="slice-card" data-id="">
+      <div class="slice-row">
+        <span class="slice-reorder">
+          <button class="btn tiny slice-up" title="Move up">▲</button>
+          <button class="btn tiny slice-down" title="Move down">▼</button>
+        </span>
+        <span class="slice-icon-wrap">
+          <img class="slice-icon-img" style="display:none" />
+          <input class="slice-icon" maxlength="4" placeholder="🔺" />
+          <button class="btn tiny slice-emoji-btn" title="Pick emoji">😀</button>
+          <button class="btn tiny slice-import-icon-btn" title="Import program icon" style="display:none">📥</button>
+          <button class="btn tiny slice-clear-icon-btn" title="Clear imported icon" style="display:none">✕</button>
+        </span>
+        <input class="slice-label-in" placeholder="Label" />
+        <select class="slice-action-type"></select>
+        <input type="color" class="slice-color" title="Slice color (optional)" />
+        <button class="btn tiny danger slice-remove" title="Remove">✕</button>
+      </div>
+      <div class="slice-action-params"></div>
+    </div>
+  </template>
+
+  <script src="settings.js"></script>
+</body>
+</html>
