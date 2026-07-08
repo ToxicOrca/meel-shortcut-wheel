@@ -102,6 +102,10 @@ function validateConfig(cfg, defaults) {
       if (s.action.type === 'SubWheel') {
         if (!Array.isArray(s.action.slices)) s.action.slices = [];
         s.action.slices = validateSlices(s.action.slices, s.id);
+        // Validate primaryAction if present
+        if (s.action.primaryAction && (!isObject(s.action.primaryAction) || !s.action.primaryAction.type)) {
+          delete s.action.primaryAction;
+        }
       }
       return s;
     });

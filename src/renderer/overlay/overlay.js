@@ -405,7 +405,12 @@ function updateSelection(pt) {
   // Set selection
   if (hit) {
     if (hit.slice.action && hit.slice.action.type === 'SubWheel') {
-      setSelected(null);
+      // SubWheel parent wedge: select primaryAction if one is configured
+      if (hit.slice.action.primaryAction) {
+        setSelected({ id: hit.slice.id, action: hit.slice.action.primaryAction });
+      } else {
+        setSelected(null);
+      }
     } else {
       setSelected({ id: hit.slice.id, action: hit.slice.action });
     }

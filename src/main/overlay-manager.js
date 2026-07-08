@@ -9,6 +9,15 @@
 //   visual overlay drawn on top of everything.
 // - We size/position it to cover the display under the cursor so the wheel can
 //   be centered exactly at the cursor point.
+// - Always-on-top is RE-ASSERTED on every show() (see show() below), not just
+//   at creation, because Windows can drop the effective topmost state.
+//
+// KNOWN LIMITATION: over a true fullscreen-EXCLUSIVE app (common in some games,
+// which take exclusive ownership of the display via DirectX), Windows may not
+// let ANY window — including a 'screen-saver'-level topmost one — draw on top.
+// That case is unavoidable from Electron. Everything else (normal windows,
+// maximized windows, borderless-fullscreen apps, and the taskbar) is covered by
+// the 'screen-saver' level + re-assert + moveTop().
 
 'use strict';
 
@@ -73,11 +82,24 @@ class OverlayManager {
 
   // Show the wheel centered at screen coordinates {x, y}. slices/appearance
   // come from the current config.
+  //
+  // Z-ORDER: the creation-time `alwaysOnTop` flag is NOT enough — Windows can
+  // demote our window when other apps assert themselves as topmost, which is
+  // why the wheel would "occasionally" open behind another window. The fix is
+  // to RE-ASSERT the highest topmost level on every open and force the window
+  // to the top of the z-order after it is shown. The strict order is:
+  //   1) position/size at the cursor  (before showing, so it never flashes at a
+  //      stale spot or gets raised before it's placed)
+  //   2) setAlwaysOnTop(true, 'screen-saver')  (re-assert the highest level;
+  //      'screen-saver' sits above normal topmost windows and the taskbar)
+  //   3) showInactive()  (visible without stealing focus — input is captured by
+  //      the global hook, not by this window, so it must never take focus)
+  //   4) moveTop()  (explicitly raise to the front of the z-order)
   show(center, slices, appearance) {
     if (!this.win) this.create();
 
-    // Cover the display that contains the cursor so we can position the wheel
-    // anywhere on it.
+    // (1) Cover the display that contains the cursor and position FIRST, so the
+    // window is never shown/raised before it's placed.
     const display = screen.getDisplayNearestPoint(center);
     const b = display.bounds;
     this.win.setBounds({ x: b.x, y: b.y, width: b.width, height: b.height });
@@ -92,7 +114,18 @@ class OverlayManager {
     if (this._ready) send();
     else this.win.webContents.once('did-finish-load', send);
 
-    this.win.showInactive(); // show without taking focus
+    // (2) Re-assert the highest always-on-top level on EVERY open. A previous
+    // hide, or another app grabbing topmost, can drop the effective topmost
+    // state; re-setting it here is the core of the reliability fix.
+    this.win.setAlwaysOnTop(true, 'screen-saver');
+    this.win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+
+    // (3) Show without taking focus.
+    this.win.showInactive();
+
+    // (4) Force to the very top of the z-order, after it's visible.
+    this.win.moveTop();
+
     this.visible = true;
   }
 

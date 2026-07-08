@@ -91,7 +91,7 @@ async function closeWheelAndFire() {
   wheelOpen = false;
   stopCursorPoll();
   overlay.hide();
-  if (hoveredSlice && hoveredSlice.action && hoveredSlice.action.type !== 'SubWheel') {
+  if (hoveredSlice && hoveredSlice.action) {
     await runAction(hoveredSlice.action, actionContext());
   }
   hoveredSlice = null;

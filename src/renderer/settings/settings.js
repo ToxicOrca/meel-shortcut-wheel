@@ -29,7 +29,10 @@ const ACTION_PARAMS = {
   ],
   SendHotkey: [{ key: 'combo', label: 'Hotkey (e.g. Ctrl+Shift+S)', type: 'text' }],
   MediaKey: [{ key: 'key', label: 'Media key', type: 'select', options: ['play_pause', 'next', 'prev', 'stop', 'volume_up', 'volume_down', 'volume_mute'] }],
-  SubWheel: [{ key: 'slices', label: 'Sub-slices', type: 'subwheel' }]
+  SubWheel: [
+    { key: 'primaryAction', label: 'Primary action', type: 'primaryAction' },
+    { key: 'slices', label: 'Sub-slices', type: 'subwheel' }
+  ]
 };
 
 const THEME_KEYS = [
@@ -374,14 +377,13 @@ function sliceCard(slice, idx, slicesArray, onChanged) {
   }
   updateNestBtnVisibility();
   nestBtn.addEventListener('click', () => {
-    // Wrap the current action as the first sub-slice, then convert to SubWheel
+    // Convert to SubWheel, keeping the current action as the primaryAction
+    // so this slice still does something when selected directly
     const oldAction = Object.assign({}, slice.action);
-    const oldLabel = slice.label || 'Action';
     slice.action = {
       type: 'SubWheel',
-      slices: [
-        { id: 'sub-' + Date.now(), label: oldLabel, icon: slice.icon || '⭐', color: null, action: oldAction }
-      ]
+      primaryAction: oldAction,
+      slices: []
     };
     typeSel.value = 'SubWheel';
     renderActionParams(card, slice, updateImportBtnVisibility, slicesArray, onChanged);
@@ -554,6 +556,74 @@ function paramRow(slice, param, onPathChange, slicesArray, onChanged) {
       slice.action[param.key] = e.target.value.trim() ? e.target.value.trim().split(/\s+/) : [];
     });
     row.appendChild(input);
+  } else if (param.type === 'primaryAction') {
+    // Primary action editor for SubWheel parent slice
+    row.innerHTML = '';
+    const container = el('div', { class: 'primary-action-editor' });
+    const heading = el('div', { class: 'subwheel-header' },
+      el('label', {}, 'Primary action (fires when this slice is selected)'));
+    container.appendChild(heading);
+
+    // Action type selector for the primary action
+    const actionTypes = window.meel.actionTypes.filter((t) => t !== 'SubWheel');
+    const pAction = slice.action.primaryAction || null;
+
+    if (pAction) {
+      const pRow = el('div', { class: 'primary-action-row' });
+      const typeSel = el('select', { class: 'primary-action-type' });
+      actionTypes.forEach((t) => typeSel.appendChild(el('option', { value: t }, t)));
+      typeSel.value = pAction.type;
+      typeSel.addEventListener('change', (e) => {
+        slice.action.primaryAction = { type: e.target.value };
+        renderActionParams(card, slice, onPathChange, slicesArray, onChanged);
+        renderPreview();
+      });
+      pRow.appendChild(typeSel);
+
+      // Render params for the primary action type
+      const pParams = ACTION_PARAMS[pAction.type] || [];
+      pParams.forEach((pp) => {
+        const pVal = pAction[pp.key];
+        const pInput = el('input', { type: 'text', value: pVal || '', placeholder: pp.label });
+        pInput.addEventListener('input', (e) => { slice.action.primaryAction[pp.key] = e.target.value; });
+        if (pp.type === 'file' || pp.type === 'folder') {
+          const browseBtn = el('button', { class: 'btn tiny' }, 'Browse…');
+          browseBtn.addEventListener('click', async () => {
+            const picked = pp.type === 'file' ? await window.meel.pickFile() : await window.meel.pickFolder();
+            if (picked) { slice.action.primaryAction[pp.key] = picked; pInput.value = picked; }
+          });
+          const fileRow = el('div', { class: 'row' }, el('label', {}, pp.label), pInput, browseBtn);
+          pRow.appendChild(fileRow);
+        } else if (pp.type === 'select') {
+          const pSel = el('select', {});
+          pp.options.forEach((o) => pSel.appendChild(el('option', { value: o }, o)));
+          pSel.value = pVal || pp.options[0];
+          pSel.addEventListener('change', (e) => { slice.action.primaryAction[pp.key] = e.target.value; });
+          pRow.appendChild(el('div', { class: 'row' }, el('label', {}, pp.label), pSel));
+        } else {
+          pRow.appendChild(el('div', { class: 'row' }, el('label', {}, pp.label), pInput));
+        }
+      });
+
+      const removeBtn = el('button', { class: 'btn tiny danger' }, 'Remove primary action');
+      removeBtn.addEventListener('click', () => {
+        delete slice.action.primaryAction;
+        renderActionParams(card, slice, onPathChange, slicesArray, onChanged);
+        renderPreview();
+      });
+      pRow.appendChild(removeBtn);
+      container.appendChild(pRow);
+    } else {
+      const addBtn = el('button', { class: 'btn tiny primary' }, '+ Add primary action');
+      addBtn.addEventListener('click', () => {
+        slice.action.primaryAction = { type: 'LaunchProgram', path: '', args: [] };
+        renderActionParams(card, slice, onPathChange, slicesArray, onChanged);
+        renderPreview();
+      });
+      container.appendChild(addBtn);
+    }
+
+    row.appendChild(container);
   } else if (param.type === 'subwheel') {
     // Inline sub-slice editor for SubWheel action type
     row.innerHTML = '';

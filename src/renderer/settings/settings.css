@@ -188,6 +188,17 @@ code { background: var(--bg-card); padding: 6px 10px; border-radius: 6px; border
 /* Nested sub-wheel editors get progressively indented */
 .subwheel-editor .subwheel-editor { border-left-color: var(--border); }
 
+/* Primary action editor for SubWheel parent */
+.primary-action-editor {
+  margin-bottom: 10px; padding: 8px 0 8px 14px;
+  border-left: 2px solid var(--accent);
+}
+.primary-action-editor .subwheel-header { margin-bottom: 8px; }
+.primary-action-editor .subwheel-header label { color: var(--text-dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+.primary-action-row { display: flex; flex-direction: column; gap: 6px; }
+.primary-action-row select { max-width: 200px; }
+.primary-action-row .btn.danger { margin-top: 4px; align-self: flex-start; }
+
 /* Footer */
 .footerbar {
   display: flex; align-items: center; justify-content: space-between;
