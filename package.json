@@ -1,7 +1,7 @@
 {
   "name": "meel-shortcut-mouse",
   "productName": "Meel",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Meel — a radial shortcut wheel for Windows, triggered by an extra mouse button. Press a hotkey (usually MB4/MB5) to pop a dark-themed radial menu around the cursor; release over a slice to fire its action.",
   "main": "src/main/main.js",
   "author": "Tracey",
