@@ -151,12 +151,21 @@ function loadConfig() {
 // exist at author time).
 function applyRuntimeDefaults(cfg) {
   const shots = path.join(app.getPath('pictures'), 'Meel Screenshots');
-  const profile = cfg.profiles && cfg.profiles[cfg.activeProfile];
-  if (!profile) return;
-  for (const slice of profile.slices) {
-    if (slice.action && slice.action.type === 'Screenshot' && !slice.action.saveDir) {
-      slice.action.saveDir = shots;
+  // Apply to EVERY profile (not just the active one) and recurse into
+  // SubWheel children, so switching profiles later doesn't leave Screenshot
+  // slices without a save folder.
+  function walk(slices) {
+    if (!Array.isArray(slices)) return;
+    for (const slice of slices) {
+      if (!slice.action) continue;
+      if (slice.action.type === 'Screenshot' && !slice.action.saveDir) {
+        slice.action.saveDir = shots;
+      }
+      if (slice.action.type === 'SubWheel') walk(slice.action.slices);
     }
+  }
+  for (const profile of Object.values(cfg.profiles || {})) {
+    if (profile && Array.isArray(profile.slices)) walk(profile.slices);
   }
 }
 

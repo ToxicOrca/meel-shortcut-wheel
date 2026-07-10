@@ -14,14 +14,19 @@ const ACTION_PARAMS = {
   LaunchProgram: [
     { key: 'path', label: 'Program', type: 'file' },
     { key: 'args', label: 'Arguments', type: 'list' },
-    { key: 'cwd', label: 'Working dir', type: 'folder' }
+    { key: 'cwd', label: 'Working dir', type: 'folder' },
+    { key: 'focusExisting', label: 'If already running, focus it (don’t launch again)', type: 'checkbox', default: true }
   ],
   Screenshot: [
     { key: 'mode', label: 'Mode', type: 'select', options: ['full', 'region'] },
     { key: 'saveDir', label: 'Save folder', type: 'folder' },
     { key: 'toClipboard', label: 'Also copy to clipboard', type: 'checkbox' }
   ],
-  OpenURL: [{ key: 'url', label: 'URL', type: 'text' }],
+  OpenURL: [
+    { key: 'url', label: 'URL', type: 'text' },
+    { key: 'focusExisting', label: 'If a tab is already open, switch to it', type: 'checkbox', default: true },
+    { key: 'matchTitle', label: 'Tab title match (optional — e.g. "YouTube")', type: 'text' }
+  ],
   OpenFolder: [{ key: 'path', label: 'Folder', type: 'folder' }],
   RunCommand: [
     { key: 'command', label: 'Command', type: 'text' },
@@ -524,7 +529,9 @@ function paramRow(slice, param, onPathChange, slicesArray, onChanged) {
 
   if (param.type === 'checkbox') {
     const input = el('input', { type: 'checkbox' });
-    input.checked = !!val;
+    // Respect the param's default when the action has no explicit value yet
+    // (e.g. focusExisting defaults to ON for existing configs).
+    input.checked = val === undefined ? !!param.default : !!val;
     input.addEventListener('change', (e) => { slice.action[param.key] = e.target.checked; });
     row.appendChild(input);
   } else if (param.type === 'select') {

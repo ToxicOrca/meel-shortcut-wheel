@@ -22,6 +22,7 @@ const fs = require('fs');
 const os = require('os');
 const { spawn, exec, execFile } = require('child_process');
 const { shell, clipboard, nativeImage, screen } = require('electron');
+const win = require('./windows');
 
 // screenshot-desktop shells out to platform tools. Require lazily so a missing
 // binary only breaks the Screenshot action, not startup.
@@ -99,7 +100,15 @@ function comboToSendKeys(combo) {
   for (const part of parts) {
     const low = part.toLowerCase();
     if (low in MODS) { prefix += MODS[low]; continue; }
-    key = NAMED[low] || (part.length === 1 ? part.toLowerCase() : `{${part.toUpperCase()}}`);
+    if (NAMED[low]) {
+      key = NAMED[low];
+    } else if (part.length === 1) {
+      // SendKeys metacharacters (+ ^ % ~ ( ) { } [ ]) must be brace-escaped
+      // or they are interpreted as modifiers/grouping instead of literal keys.
+      key = /[+^%~(){}[\]]/.test(part) ? `{${part}}` : part.toLowerCase();
+    } else {
+      key = `{${part.toUpperCase()}}`;
+    }
   }
   return prefix + key;
 }
@@ -114,19 +123,60 @@ const MEDIA_VK = {
 
 const HANDLERS = {
   // Launch an executable with optional args and working directory.
-  LaunchProgram(action) {
+  // By default (action.focusExisting !== false), if the program is already
+  // running with a window we bring that window to the front instead of
+  // starting a second instance. After a fresh launch, the new window is also
+  // pushed to the foreground (windows launched from a background tray app
+  // otherwise often open BEHIND the current app).
+  async LaunchProgram(action) {
     const exe = expandEnv(action.path);
     if (!exe) throw new Error('LaunchProgram: no path set');
-    const args = Array.isArray(action.args) ? action.args.map(expandEnv) : [];
-    const cwd = action.cwd ? expandEnv(action.cwd) : undefined;
-    const child = spawn(exe, args, {
+    let target = exe;
+    let args = Array.isArray(action.args) ? action.args.map(expandEnv) : [];
+    let cwd = action.cwd ? expandEnv(action.cwd) : undefined;
+
+    // Resolve .lnk shortcuts to their real target: spawn() cannot execute a
+    // .lnk directly (it silently fails / errors), and we need the real exe
+    // name for already-running detection anyway.
+    if (path.extname(target).toLowerCase() === '.lnk') {
+      try {
+        const link = shell.readShortcutLink(target);
+        if (link.target) {
+          if (link.args && !args.length) args = link.args.split(/\s+/).filter(Boolean);
+          if (link.cwd && !cwd) cwd = link.cwd;
+          target = link.target;
+        }
+      } catch {
+        // Could not resolve — fall back to letting the shell open the .lnk.
+        await shell.openPath(target);
+        return { launched: target, viaShell: true };
+      }
+    }
+
+    const baseName = path.basename(target, path.extname(target));
+
+    // Already running? Focus it instead of launching again (default on).
+    if (action.focusExisting !== false && process.platform === 'win32' && baseName) {
+      const focused = await win.focusProcessWindow(baseName);
+      if (focused) return { focused: baseName, alreadyRunning: true };
+    }
+
+    const child = spawn(target, args, {
       detached: true,
       stdio: 'ignore',
       cwd: cwd && fs.existsSync(cwd) ? cwd : undefined,
       windowsHide: false
     });
+    // Without this listener a bad path raises an unhandled 'error' event,
+    // which is an uncaught exception that can take down the whole app.
+    child.on('error', (err) => console.error('[actions] LaunchProgram spawn failed:', target, err.message));
     child.unref();
-    return { launched: exe, cwd };
+
+    // Best-effort: bring the newly launched window to the front once it exists.
+    if (process.platform === 'win32') {
+      win.focusNewProcessWindow(child.pid, baseName).catch(() => {});
+    }
+    return { launched: target, cwd };
   },
 
   // Capture the screen to PNG. mode 'full' grabs the primary display; mode
@@ -163,8 +213,11 @@ const HANDLERS = {
       buf = cropped.toPNG();
       if (action.toClipboard) clipboard.writeImage(cropped);
     } else {
-      // Full screen.
-      buf = await screenshot({ format: 'png' });
+      // Full screen — capture the display the cursor is on, not always the
+      // primary one (the wheel opens at the cursor, so that display is the
+      // one the user means).
+      const cursorDisplay = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+      buf = await captureDisplayPng(screenshot, cursorDisplay);
       if (action.toClipboard) clipboard.writeImage(nativeImage.createFromBuffer(buf));
     }
 
@@ -172,22 +225,38 @@ const HANDLERS = {
     return { saved: file, clipboard: !!action.toClipboard };
   },
 
-  // Open a URL in the default browser.
-  OpenURL(action) {
+  // Open a URL in the default browser. By default (focusExisting !== false),
+  // first look for an already-open Chrome/Edge tab for this site and bring it
+  // to the front instead of opening a duplicate tab. Matching is by tab title:
+  // action.matchTitle if set, otherwise terms derived from the URL's hostname.
+  async OpenURL(action) {
     if (!action.url) throw new Error('OpenURL: no url set');
     // Basic guard: only allow http(s) and mailto to avoid surprising protocols.
     if (!/^(https?:|mailto:)/i.test(action.url)) {
       throw new Error('OpenURL: only http(s)/mailto URLs are allowed');
     }
-    shell.openExternal(action.url);
+    if (action.focusExisting !== false && process.platform === 'win32' && /^https?:/i.test(action.url)) {
+      const terms = action.matchTitle ? [action.matchTitle] : win.urlMatchTerms(action.url);
+      const focused = await win.focusBrowserTab(terms);
+      if (focused) return { focusedTab: true, url: action.url };
+    }
+    await shell.openExternal(action.url);
     return { opened: action.url };
   },
 
-  // Open a folder in the file explorer.
-  OpenFolder(action) {
+  // Open a folder in the file explorer. On Windows this reuses an existing
+  // Explorer window already showing that folder, and in every case forces the
+  // Explorer window on top of everything — windows opened from a background
+  // tray app otherwise open BEHIND the currently focused app.
+  async OpenFolder(action) {
     const dir = expandEnv(action.path);
     if (!dir) throw new Error('OpenFolder: no path set');
-    shell.openPath(dir);
+    if (!fs.existsSync(dir)) throw new Error('OpenFolder: folder does not exist: ' + dir);
+    if (process.platform === 'win32') {
+      const result = await win.openFolderOnTop(dir);
+      if (result !== 'FAIL') return { opened: dir, result };
+    }
+    await shell.openPath(dir);
     return { opened: dir };
   },
 

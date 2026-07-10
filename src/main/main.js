@@ -50,8 +50,11 @@ let hoveredSlice = null;
 let cursorPollTimer = null;
 const CURSOR_POLL_MS = 8;
 
-// Single instance — a launcher must not run twice.
-if (!app.requestSingleInstanceLock()) {
+// Single instance — a launcher must not run twice. app.quit() is asynchronous,
+// so without the explicit gate below the rest of startup (hook, tray, windows)
+// would still run briefly in the losing instance.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
   app.quit();
 }
 
@@ -156,7 +159,7 @@ function wireHook() {
   // The settings UI asked us to capture the next input as a new trigger.
   hook.on('captured', (input) => {
     if (settingsWin && !settingsWin.isDestroyed()) {
-      settingsWin.webContents.send('trigger:captured', input);
+      settingsWin.webContents.send(IPC.TRIGGER_CAPTURED, input);
     }
   });
 
@@ -366,6 +369,7 @@ function wireIpc() {
 // ---- Lifecycle --------------------------------------------------------------
 
 app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return; // this instance is quitting — don't start anything
   config = configStore.loadConfig();
 
   overlay = new OverlayManager();
